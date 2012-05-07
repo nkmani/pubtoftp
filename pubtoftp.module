@@ -1,0 +1,219 @@
+<?php
+/**
+ * @file
+ * Handles saving nodes to a FTP server as html pages.
+ * Adds text boxes for logging into FTP server in order to save.
+ */
+
+// list content types (command separated) that need to be synced
+define("PUBTOFTP_SYNC_TYPES", "article");
+
+module_load_include('inc', 'pubtoftp', 'pubtoftp.files');
+
+/**
+ * Implements hook_permission().
+ */
+function pubtoftp_permission() {
+  return array(
+    'publish to ftp' => array(
+      'title' => t('publish to ftp'),
+      'description' => t('Permission to publsh html version of a node to a FTP server'),
+    ),
+    'administer publish to ftp' => array(
+      'title' => t('Administer publish to ftp'),
+      'description' => t('Permission to save set configuration settings for Publish to FTP'),
+    ),
+  );
+}
+
+/**
+ * Check if the node type is sync'able
+ */
+function pubtoftp_syncable($type) {
+  static $types = NULL;
+  
+  if (!$types) {
+    $types = explode(",", PUBTOFTP_SYNC_TYPES);
+  }
+  
+  // node types that need to be sync (currently hardcoded)
+  foreach($types as $t) {
+    if ($t == $type)
+      return true;
+  }
+  return false;
+}
+
+/**
+ * Check if the node requires a sync to FTP
+ */
+function pubtoftp_sync($node) {
+  if (!isset($node->savetoftp))
+    return false;
+  if ($node->savetoftp && pubtoftp_syncable($node->type))
+    return true;
+  //TODO: check if the node author has FTP credentials set
+  return false;  
+}
+
+/**
+ * Act on a node being inserted or updated.
+ *
+ * This hook is invoked from node_save() before the node is saved to the
+ * database.
+ *
+ * @param $node
+ *   The node that is being inserted or updated.
+ *
+ * @ingroup node_api_hooks
+ */
+function pubtoftp_node_insert($node) {
+  if ($node->nid && pubtoftp_sync($node)) {
+    $_SESSION['pubtoftp_savenid'] = $node->nid;
+  }
+}
+
+/**
+ * pubtoftp_node_load
+ * 
+ * Process the pending updates to FTP after a node has been inserted. Anonymous node retreival right
+ * after node insertion results in a "page not found" message. To work around that, the details of the
+ * node to be retrieved are saved in a session and during the first node load (which happens after the
+ * node gets saved) finish of the node sync to FTP.
+ * 
+ * @param unknown_type $nodes
+ * @param unknown_type $types
+ */
+function pubtoftp_node_load($nodes, $types) {
+  foreach($nodes as $node) {
+    if (isset($_SESSION['pubtoftp_savenid']) && $_SESSION['pubtoftp_savenid'] == $node->nid) {
+      $node->savetoftp = 1;
+      pubtoftp_node_sync($node);
+      unset($_SESSION['pubtoftp_savenid']);      
+    }
+  }
+}
+
+/**
+ * pubtoftp_node_update
+ * 
+ * Sync the updated node to FTP.
+ * 
+ * @param unknown_type $node
+ */
+function pubtoftp_node_update($node) {
+  if ($node->nid && pubtoftp_sync($node)) {
+    $_SESSION['pubtoftp_savenid'] = $node->nid;
+  }
+}
+
+/**
+ * pubtoftp_node_sync
+ * 
+ * Sync the node (either inserted to updated) to corresponding FTP server
+ * 
+ * @param unknown_type $node
+ */
+function pubtoftp_node_sync($node) {
+  if ($node->nid && pubtoftp_sync($node)) {
+    $fp = pubtoftp_ftp_connect($node->uid);
+    if ($fp) {
+      pubtoftp_create_directories(true);
+      $file_place = pubtoftp_data_process($node, true, false, true);
+      pubtoftp_ftp_files($fp, NULL, $file_place, true);
+      ftp_close($fp);
+    }
+  }
+}
+
+/**
+ * pubtoftp_node_form_delete_submit
+ * 
+ * Save the node details to be deleted in session variables. Needs to be done here since
+ * the details captured during form_delete are not available during the actual call to delete
+ * the node (in hook_node_delete)
+ * 
+ * @param unknown_type $form
+ * @param unknown_type $form_state
+ */
+function pubtoftp_node_form_delete_submit($form, &$form_state) {
+  if (isset($form['savetoftp'])) {
+    $_SESSION['savetoftp'] = $form['savetoftp']['#value'];
+    $node = $form['#node'];
+    $_SESSION['pubtoftp_path'] = drupal_get_path_alias('node/' . $node->nid);
+  }
+}
+
+/**
+ * Respond to node deletion.
+ *
+ * This hook is invoked from node_delete_multiple() after the type-specific
+ * hook_delete() has been invoked, but before hook_entity_delete and
+ * field_attach_delete() are called, and before the node is removed from the
+ * node table in the database.
+ *
+ * @param $node
+ *   The node that is being deleted.
+ *
+ * @ingroup node_api_hooks
+ */
+function pubtoftp_node_delete($node) {
+  if (isset($_SESSION['savetoftp'])) {
+    $node->savetoftp = $_SESSION['savetoftp'];
+    if (pubtoftp_sync($node)) {
+      // we can't rely on the path alias, since it is probably deleted before we even get a chance to see it.
+      // so we use the value saved in session before the node deletion started.
+      $path = $_SESSION['pubtoftp_path'];
+      $html_name_array = explode('/', $path);
+      $html_name = end($html_name_array);
+      $remote_file = check_plain(str_replace(" ", "", $html_name)). '.html';
+      $fp = pubtoftp_ftp_connect($node->uid);
+      if (!$fp || !ftp_delete($fp, $remote_file)) {
+        drupal_set_message(t('Was unable to delete the @remote_file on the server.', array('@remote_file' => $remote_file)));
+      } else {
+        drupal_set_message(t('Deleted @remote_file on the server.', array('@remote_file' => $remote_file)));
+      }
+      
+      // if the file being deleted is the current index then reset the ftp_index value
+      // so that the next file written can be made the index
+      $user = user_load($node->uid);
+      if (isset($user->field_ftp_index['und'])) {
+        if ($user->field_ftp_index['und'][0]['value'] == $node->nid) {
+          $edit = array(
+              'field_ftp_index' => array(
+                  'und' => array(
+                      0 => array('value' => 0),
+                  ),
+              ),
+          );
+          user_save($user, $edit);
+        }
+      }
+
+      if ($fp)
+        ftp_close($fp);
+    }
+  }
+}
+
+/**
+ * Implementation of hook_form_alter().
+ * 
+ * Add a checkbox "FTP Synchronize" 
+ */
+function pubtoftp_form_alter(&$form, $form_state, $form_id) {
+  if (user_access('save to ftp')) {
+    if (isset($form['#node']) && $form_id == $form['#node']->type . '_node_form') {
+      $node = menu_get_object();
+      if (pubtoftp_syncable($form['#node']->type)) {
+        $form['savetoftp'] = array(
+            '#prefix' => '<div id="savetoftp-div">',
+            '#type' => 'checkbox',
+            '#title' => t('FTP Synchronize'),
+            '#suffix' => '</div>',
+        );
+        $form['actions']['delete']['#submit'][] = 'pubtoftp_node_form_delete_submit';
+      }
+    }
+  }
+}

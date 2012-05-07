@@ -1,0 +1,45 @@
+Original Author (savetoftp)
+---------------------------
+Created by Kevin O'Brien
+http://www.coderintherye.com
+Supported through my work at http://www.kiva.org (Make a loan, change a life)
+
+Site adminstration module which helps site admins send static html versions of their sites
+to an external web server. This can be very useful if one wants to use Drupal to manage content
+but host it on a different server, especially if that server is not capable of having Drupal
+installed on it.
+
+Installation
+------------
+Untar or unzip the downloaded module to your module directory (e.g. sites/all/modules)
+and then enable on the admin modules page (/admin/modules).
+
+Requirements
+------------
+PHP Version > 5.1.2
+Need to have the QueryPath module installed (http://drupal.org/project/querypath)
+
+Usage
+------
+When a node is inserted or edited, at the bottom of the page there will be a "FTP Synchronize" checkbox.
+Selecting this checkbox, would ensure that the node is saved to the node author's FTP location as saved
+by the administrator in the user's profile page. The html version of the node as well as any needed files
+are copied to the FTP server.
+
+Currently the only node type that supports "Publish to FTP" is article. To add additional node types, modify
+the following line in pubtoftp.module: 
+  define("PUBTOFTP_SYNC_TYPES", "article");
+
+User's FTP Credentials
+----------------------
+Create 4 fields in the user's profile settings (admin/config/people/accounts/fields) with the following 
+field names:
+
+field_ftp_server -- Text
+field_ftp_username -- Text
+field_ftp_password -- Text
+field_ftp_directory -- Text
+field_ftp_index -- Integer (holds the nid of the index page)
+
+and enter appropriate values for the user. When the user created FTP sync'able nodes, these credentials
+are used to copy the node contents to the server.
