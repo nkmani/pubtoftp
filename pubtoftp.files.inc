@@ -21,7 +21,7 @@ function pubtoftp_file_directory_path() {
  */
 function pubtoftp_create_directories($everything) {
   $folders = array();
-  $export_folder = '/savetoftp';
+  $export_folder = '/pubtoftp';
   $export_path = $_SERVER['DOCUMENT_ROOT'] . base_path() . pubtoftp_file_directory_path() . $export_folder;
   // First delete existing directory to avoid build-up
   if(is_dir($export_path)) {
@@ -122,7 +122,7 @@ function pubtoftp_data_process($node, $everything, $links, $anon) {
     $new_pattern_js_and_images = 'src="' . $name;
     $html_fixed = preg_replace($pattern_js_and_images, $new_pattern_js_and_images, $html_original);
   }
-  $file_place = pubtoftp_file_directory_path() . '/savetoftp/' . $html_name;
+  $file_place = pubtoftp_file_directory_path() . '/pubtoftp/' . $html_name;
   pubtoftp_save_file($file_place, $html_fixed);
   
   // generate a .htaccess if this is the index file
@@ -139,7 +139,7 @@ function pubtoftp_data_process($node, $everything, $links, $anon) {
       );
       user_save($user, $edit);
       
-      $file_place = pubtoftp_file_directory_path() . '/savetoftp/.htaccess';
+      $file_place = pubtoftp_file_directory_path() . '/pubtoftp/.htaccess';
       $htaccess = "DirectoryIndex $html_name index.html\n";
       pubtoftp_save_file($file_place, $htaccess);
     }
@@ -191,9 +191,9 @@ function pubtoftp_copy_files($files) {
     $dr = str_replace($bp, "", $dr);
   }
   foreach($files as $file) {
-    $path = file_unmanaged_copy($dr . $file, DRUPAL_ROOT . '/' . pubtoftp_file_directory_path() . '/savetoftp/' . basename($file), FILE_EXISTS_REPLACE);
+    $path = file_unmanaged_copy($dr . $file, DRUPAL_ROOT . '/' . pubtoftp_file_directory_path() . '/pubtoftp/' . basename($file), FILE_EXISTS_REPLACE);
     if(!$path) {
-      drupal_set_message(t('Failed to copy @file to the default files directory @dir', array('@file' => $file, '@dir' => pubtoftp_file_directory_path() . '/savetoftp')));
+      drupal_set_message(t('Failed to copy @file to the default files directory @dir', array('@file' => $file, '@dir' => pubtoftp_file_directory_path() . '/pubtoftp')));
     } 
   }
 }
@@ -244,7 +244,7 @@ function pubtoftp_ftp_connect($uid) {
  * @param $everything boolean sends the css,js,and image files when TRUE
  */
 function pubtoftp_ftp_files($fp, $remote_file, $file_place, $everything) {
-  $path = pubtoftp_file_directory_path() . '/' . 'savetoftp/';
+  $path = pubtoftp_file_directory_path() . '/' . 'pubtoftp/';
   if ($everything) {
     pubtoftp_ftp_recurse($fp, $path);
   }

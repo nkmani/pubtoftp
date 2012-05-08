@@ -48,9 +48,9 @@ function pubtoftp_syncable($type) {
  * Check if the node requires a sync to FTP
  */
 function pubtoftp_sync($node) {
-  if (!isset($node->savetoftp))
+  if (!isset($node->pubtoftp))
     return false;
-  if ($node->savetoftp && pubtoftp_syncable($node->type))
+  if ($node->pubtoftp && pubtoftp_syncable($node->type))
     return true;
   //TODO: check if the node author has FTP credentials set
   return false;  
@@ -87,7 +87,7 @@ function pubtoftp_node_insert($node) {
 function pubtoftp_node_load($nodes, $types) {
   foreach($nodes as $node) {
     if (isset($_SESSION['pubtoftp_savenid']) && $_SESSION['pubtoftp_savenid'] == $node->nid) {
-      $node->savetoftp = 1;
+      $node->pubtoftp = 1;
       pubtoftp_node_sync($node);
       unset($_SESSION['pubtoftp_savenid']);      
     }
@@ -137,8 +137,8 @@ function pubtoftp_node_sync($node) {
  * @param unknown_type $form_state
  */
 function pubtoftp_node_form_delete_submit($form, &$form_state) {
-  if (isset($form['savetoftp'])) {
-    $_SESSION['savetoftp'] = $form['savetoftp']['#value'];
+  if (isset($form['pubtoftp'])) {
+    $_SESSION['pubtoftp'] = $form['pubtoftp']['#value'];
     $node = $form['#node'];
     $_SESSION['pubtoftp_path'] = drupal_get_path_alias('node/' . $node->nid);
   }
@@ -158,8 +158,8 @@ function pubtoftp_node_form_delete_submit($form, &$form_state) {
  * @ingroup node_api_hooks
  */
 function pubtoftp_node_delete($node) {
-  if (isset($_SESSION['savetoftp'])) {
-    $node->savetoftp = $_SESSION['savetoftp'];
+  if (isset($_SESSION['pubtoftp'])) {
+    $node->pubtoftp = $_SESSION['pubtoftp'];
     if (pubtoftp_sync($node)) {
       // we can't rely on the path alias, since it is probably deleted before we even get a chance to see it.
       // so we use the value saved in session before the node deletion started.
@@ -206,8 +206,8 @@ function pubtoftp_form_alter(&$form, $form_state, $form_id) {
     if (isset($form['#node']) && $form_id == $form['#node']->type . '_node_form') {
       $node = menu_get_object();
       if (pubtoftp_syncable($form['#node']->type)) {
-        $form['savetoftp'] = array(
-            '#prefix' => '<div id="savetoftp-div">',
+        $form['pubtoftp'] = array(
+            '#prefix' => '<div id="pubtoftp-div">',
             '#type' => 'checkbox',
             '#title' => t('FTP Synchronize'),
             '#suffix' => '</div>',
